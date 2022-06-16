@@ -1,64 +1,72 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::{RefCell};
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use futures::executor::block_on;
+use std::fs::{create_dir_all, File};
+use std::io::Write;
+use std::path;
+use std::path::Path;
+use rand::{Rng, thread_rng};
+use rand::distributions::Alphanumeric;
 
-#[derive(Debug)]
-struct Node(i32);
+static THRESHOLD: u32 = u32::MAX / 100 * 20;
+static MAX_LEVEL: u32 = 5;
 
-struct HighNode(Node);
+fn if_continue_gen(level : u32) -> bool {
+    let i : u32 = thread_rng().gen();
+    //the lesser the level is,  the return tends to true
+    match i.checked_mul(MAX_LEVEL - level) {
+        Some(r) => r > THRESHOLD,
+        None => true
+    }
+}
 
-async fn foo() -> i32 {
-    1
+fn if_continue_gen_file() -> bool {
+    let i : u32 = thread_rng().gen();
+    i > THRESHOLD
+}
+
+fn gen_string(len : usize) -> String {
+    thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(len)
+        .map(char::from)
+        .collect()
+}
+
+
+fn gen_dir_under_path(upper_path: &str, mut level: u32) {
+    level += 1;
+    let mut i = 0;
+
+    while if_continue_gen_file() {
+        println!("gen file");
+        let file_name = gen_string(6);
+        let upper = upper_path.to_string();
+        let full_path =  upper + "/" + &file_name + &i.to_string();
+        let mut file = File::create(Path::new(&full_path)).unwrap();
+        file.write_all(gen_string(100).as_bytes()).unwrap();
+        i += 1;
+    }
+
+    if level >= MAX_LEVEL {
+        return;
+    }
+
+    while if_continue_gen(level) {
+        println!("gen dir");
+        let dir_name = gen_string(6);
+        let upper = upper_path.to_string();
+        let full_path =  upper + "/" + &dir_name + &i.to_string();
+        let new_path_prefix = Path::new(&full_path);
+        create_dir_all(new_path_prefix).unwrap();
+        gen_dir_under_path(&full_path, level);
+        i += 1;
+    }
+}
+
+fn create_test_dir() {
+    let origin_path = "./test_dir/origin";
+    create_dir_all(Path::new(origin_path)).unwrap();
+    gen_dir_under_path(origin_path, 0);
 }
 
 fn main() {
-    /*
-    immutable、mutable和ownership的属性基于variable
-     */
-    let x = Node(1);
-    let mut c = RefCell::new(x);
-    let y = &mut c.get_mut().0;
-    *y = *y + 1;
-    println!("{}", c.get_mut().0);
-
-    let x = Node(2);
-    let mut h = HighNode(x);
-    let y = &mut h.0.0;
-    *y = *y + 1;
-    println!("{}", h.0.0);
-
-
-    let x = Node(8);
-    let rc = Rc::new(RefCell::new(x));
-    let rc2 = rc.clone();
-
-    println!("{}", (*rc).borrow().0);
-    (*rc2).borrow_mut().0 += 1;
-    println!("{}", (*rc).borrow().0);
-
-    println!("----------thread----------");
-
-    let x = Arc::new(Mutex::new(1));
-    let y = x.clone();
-    let t = thread::spawn(move || {
-        let mut v = y.lock().unwrap();
-        *v += 1;
-        println!("{}", v);
-    });
-
-    let v = x.lock().unwrap();
-
-    println!("{}", v);
-
-    drop(v);
-    t.join().unwrap();
-
-    println!("-----------async----------");
-
-    block_on(async {
-        println!("{}", foo().await);
-    });
+    create_test_dir();
 }
