@@ -2,7 +2,7 @@ use std::fs;
 use std::fs::{create_dir, create_dir_all, File, read_to_string};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 fn copy_file(from : &Path, to: &Path) {
     let content = fs::read_to_string(from).unwrap();
@@ -51,19 +51,38 @@ fn copy_dir_recursive(from: &Path, dest: &Path, depth_path: &PathBuf) {
     }
 }
 
+#[derive(Subcommand, Debug)]
+enum Test {
+    /// Add
+    Add {
+        #[clap(value_parser)]
+        name: Option<String>
+    }
+}
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
+#[clap(propagate_version = true)]
 struct Args {
-    #[clap(short, long, value_parser)]
-    name: String,
+    // #[clap(short, long, value_parser)]
+    // name: String,
     #[clap(short, long, value_parser, default_value_t = 1)]
     count: u8,
+
+    #[clap(subcommand)]
+    test: Test,
+
 }
 
 fn main() {
     let args = Args::parse();
     for _ in 0..args.count {
-        println!("Hello {}!", args.name);
+        println!("Hello {}!", args.count);
+    }
+    match &args.test {
+        Test::Add { name} => {
+            println!("'myapp add' was used, name is: {:?}", name)
+        }
     }
     // copy_dir_recursive(Path::new("./test_dir/copy_test_dir"), Path::new("./test_dir/copy_test_dir_copied"), &PathBuf::new());
 }
