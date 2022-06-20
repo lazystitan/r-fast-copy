@@ -1,57 +1,10 @@
 mod test_gen;
+mod copy;
 
 use crate::test_gen::TestDirGenerator;
 use clap::{Parser, Subcommand};
-use std::fs;
-use std::fs::{create_dir_all, read_to_string, File};
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-
-fn copy_file(from: &Path, to: &Path) {
-    let content = fs::read_to_string(from).unwrap();
-    let mut file = fs::File::create(to).unwrap();
-    file.write_all(content.as_bytes()).unwrap();
-}
-#[cfg(test)]
-mod copy_test {
-    use super::*;
-
-    #[test]
-    fn copy_file_test() {
-        let from = Path::new("./test_dir/copy_test_dir/origin_file");
-        let to = Path::new("./test_dir/copy_test_dir/copied_file1");
-        copy_file(&from, &to);
-        let content_from = fs::read_to_string(&from).unwrap();
-        let content_to = fs::read_to_string(&to).unwrap();
-        assert_eq!(content_to, content_from);
-    }
-}
-
-fn copy_dir_recursive(from: &Path, dest: &Path, depth_path: &PathBuf) {
-    println!("-----------");
-    println!("from : {:?}", from);
-    println!("dest : {:?}", dest);
-    println!("depth_path : {:?}", depth_path);
-    let read_dir = from.clone().to_path_buf().join(depth_path);
-    println!("read_dir : {:?}", read_dir);
-    for entry in fs::read_dir(read_dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        let new_depth_path = depth_path.clone().join(Path::new(&entry.file_name()));
-        let creating_path = dest.clone().to_path_buf().join(new_depth_path.clone());
-        if path.is_dir() {
-            println!("next depth's path: {:?}", new_depth_path);
-            println!("creating path: {:?}", new_depth_path);
-            create_dir_all(&creating_path).unwrap();
-            copy_dir_recursive(from, dest, &new_depth_path);
-        } else {
-            let read_file = from.clone().to_path_buf().join(new_depth_path.clone());
-            println!("creating file : {:?}", creating_path);
-            copy_file(read_file.as_path(), creating_path.as_path());
-        }
-    }
-}
+use std::fs::{create_dir_all};
+use std::path::{Path};
 
 #[derive(Subcommand, Debug)]
 enum TestCommand {

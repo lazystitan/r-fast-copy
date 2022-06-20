@@ -1,9 +1,9 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use std::fs::{create_dir_all, File};
+use std::io;
 use std::io::Write;
 use std::path::Path;
-use std::thread::Thread;
 
 pub struct TestDirGenerator<'a> {
     threshold: f64,
@@ -16,12 +16,12 @@ impl<'a> TestDirGenerator<'a> {
         TestBirGeneratorBuilder::new()
     }
 
-    pub fn gen(self) -> Result<(), &'static str> {
-        self.gen_dir_recursive(self.upper_path.to_str().unwrap(), 0);
+    pub fn gen(self) -> Result<(), io::Error> {
+        self.gen_dir_recursive(self.upper_path.to_str().unwrap(), 0)?;
         Ok(())
     }
 
-    fn gen_dir_recursive(&self, upper_path: &str, mut level: u32) {
+    fn gen_dir_recursive(&self, upper_path: &str, mut level: u32) -> Result<(), io::Error> {
         level += 1;
         let mut i = 0;
 
@@ -29,14 +29,14 @@ impl<'a> TestDirGenerator<'a> {
             let file_name = Self::gen_string(6);
             let upper = upper_path.to_string();
             let full_path = upper + "/" + &file_name + &i.to_string();
-            let mut file = File::create(Path::new(&full_path)).unwrap();
-            file.write_all(Self::gen_string(100).as_bytes()).unwrap();
+            let mut file = File::create(Path::new(&full_path))?;
+            file.write_all(Self::gen_string(100).as_bytes())?;
             println!("Created file at {}", full_path);
             i += 1;
         }
 
         if level >= self.max_depth {
-            return;
+            return Ok(());
         }
 
         while self.if_continue_gen(level) {
@@ -44,11 +44,13 @@ impl<'a> TestDirGenerator<'a> {
             let upper = upper_path.to_string();
             let full_path = upper + "/" + &dir_name + &i.to_string();
             let new_path_prefix = Path::new(&full_path);
-            create_dir_all(new_path_prefix).unwrap();
-            self.gen_dir_recursive(&full_path, level);
+            create_dir_all(new_path_prefix)?;
+            self.gen_dir_recursive(&full_path, level)?;
             println!("Created directory at {}", full_path);
             i += 1;
         }
+
+        Ok(())
     }
 
     fn if_continue_gen(&self, level: u32) -> bool {
