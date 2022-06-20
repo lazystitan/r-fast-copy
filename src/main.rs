@@ -1,5 +1,6 @@
 mod test_gen;
 
+use crate::test_gen::TestDirGenerator;
 use clap::{Parser, Subcommand};
 use std::fs;
 use std::fs::{create_dir_all, read_to_string, File};
@@ -57,7 +58,13 @@ enum TestCommand {
     /// generate test folder in path
     GenTestFolder {
         #[clap(value_parser)]
-        path: Option<String>,
+        path: String,
+
+        #[clap(value_parser, short = 'd', long)]
+        max_depth: Option<u32>,
+
+        #[clap(value_parser, short, long)]
+        threshold: Option<f64>,
     },
 }
 
@@ -80,23 +87,35 @@ fn main() {
         println!("Hello {}!", args.count);
     }
     match &args.test_command {
-        TestCommand::GenTestFolder { path } => {
-            if let Some(path) = path {
-                let path = Path::new(path);
-                println!(
-                    "path: {:?}, exists: {:?}, is_dir: {:?}",
-                    path,
-                    path.exists(),
-                    path.is_dir()
-                );
-                if path.exists() && path.is_dir() {
-                    test_gen::create_test_dir_in_path(path);
-                } else if !path.exists() {
-                    create_dir_all(path).unwrap();
-                    test_gen::create_test_dir_in_path(path);
-                }
+        TestCommand::GenTestFolder {
+            path,
+            max_depth,
+            threshold,
+        } => {
+            let path = Path::new(path);
+            println!(
+                "path: {:?}, exists: {:?}, is_dir: {:?}",
+                path,
+                path.exists(),
+                path.is_dir()
+            );
+
+            if !path.exists() {
+                create_dir_all(path).unwrap();
             }
-            println!("invalid path");
+
+            let mut g = TestDirGenerator::builder();
+            g = g.upper_path(path);
+
+            if let Some(md) = max_depth {
+                g = g.max_depth(*md);
+            }
+
+            if let Some(t) = threshold {
+                g = g.threshold(*t);
+            }
+
+            g.build().unwrap().gen().unwrap()
         }
     }
     // copy_dir_recursive(Path::new("./test_dir/copy_test_dir"), Path::new("./test_dir/copy_test_dir_copied"), &PathBuf::new());

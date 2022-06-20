@@ -1,75 +1,122 @@
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::path::Path;
-use rand::{Rng, thread_rng};
-use rand::distributions::Alphanumeric;
+use std::thread::Thread;
 
-static THRESHOLD: u32 = u32::MAX / 100 * 20;
-static MAX_LEVEL: u32 = 5;
+pub struct TestDirGenerator<'a> {
+    threshold: f64,
+    max_depth: u32,
+    upper_path: &'a Path,
+}
 
-fn if_continue_gen(level: u32) -> bool {
-    let i: u32 = thread_rng().gen();
-    //the lesser the level is,  the return tends to true
-    match i.checked_mul(MAX_LEVEL - level) {
-        Some(r) => r > THRESHOLD,
-        None => true,
+impl<'a> TestDirGenerator<'a> {
+    pub fn builder() -> TestBirGeneratorBuilder<'a> {
+        TestBirGeneratorBuilder::new()
+    }
+
+    pub fn gen(self) -> Result<(), &'static str> {
+        self.gen_dir_recursive(self.upper_path.to_str().unwrap(), 0);
+        Ok(())
+    }
+
+    fn gen_dir_recursive(&self, upper_path: &str, mut level: u32) {
+        level += 1;
+        let mut i = 0;
+
+        while self.if_continue_gen_file() {
+            let file_name = Self::gen_string(6);
+            let upper = upper_path.to_string();
+            let full_path = upper + "/" + &file_name + &i.to_string();
+            let mut file = File::create(Path::new(&full_path)).unwrap();
+            file.write_all(Self::gen_string(100).as_bytes()).unwrap();
+            println!("Created file at {}", full_path);
+            i += 1;
+        }
+
+        if level >= self.max_depth {
+            return;
+        }
+
+        while self.if_continue_gen(level) {
+            let dir_name = Self::gen_string(6);
+            let upper = upper_path.to_string();
+            let full_path = upper + "/" + &dir_name + &i.to_string();
+            let new_path_prefix = Path::new(&full_path);
+            create_dir_all(new_path_prefix).unwrap();
+            self.gen_dir_recursive(&full_path, level);
+            println!("Created directory at {}", full_path);
+            i += 1;
+        }
+    }
+
+    fn if_continue_gen(&self, level: u32) -> bool {
+        let mut i: f64 = thread_rng().gen_range(0.0..1.0);
+        //the lesser the level is,  the return tends to true
+        i = i * (self.max_depth - level) as f64;
+        i > self.threshold
+    }
+
+    fn if_continue_gen_file(&self) -> bool {
+        let i: f64 = thread_rng().gen_range(0.0..1.0);
+        i > self.threshold
+    }
+
+    fn gen_string(len: usize) -> String {
+        thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(len)
+            .map(char::from)
+            .collect()
     }
 }
 
-fn if_continue_gen_file() -> bool {
-    let i: u32 = thread_rng().gen();
-    i > THRESHOLD
+pub struct TestBirGeneratorBuilder<'a> {
+    threshold: f64,
+    max_depth: u32,
+    upper_path: Option<&'a Path>,
 }
 
-fn gen_string(len: usize) -> String {
-    thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(len)
-        .map(char::from)
-        .collect()
-}
-
-fn gen_dir_under_path(upper_path: &str, mut level: u32) {
-    level += 1;
-    let mut i = 0;
-
-    while if_continue_gen_file() {
-        println!("gen file");
-        let file_name = gen_string(6);
-        let upper = upper_path.to_string();
-        let full_path = upper + "/" + &file_name + &i.to_string();
-        let mut file = File::create(Path::new(&full_path)).unwrap();
-        file.write_all(gen_string(100).as_bytes()).unwrap();
-        i += 1;
+impl<'a> TestBirGeneratorBuilder<'a> {
+    fn new() -> Self {
+        Self {
+            threshold: 0.2,
+            max_depth: 5,
+            upper_path: None,
+        }
     }
 
-    if level >= MAX_LEVEL {
-        return;
+    pub fn threshold(mut self, threshold: f64) -> Self {
+        self.threshold = threshold;
+        self
     }
 
-    while if_continue_gen(level) {
-        println!("gen dir");
-        let dir_name = gen_string(6);
-        let upper = upper_path.to_string();
-        let full_path = upper + "/" + &dir_name + &i.to_string();
-        let new_path_prefix = Path::new(&full_path);
-        create_dir_all(new_path_prefix).unwrap();
-        gen_dir_under_path(&full_path, level);
-        i += 1;
+    pub fn max_depth(mut self, max_depth: u32) -> Self {
+        self.max_depth = max_depth;
+        self
     }
-}
 
-pub fn create_test_dir_in_path(path: &Path) {
-    create_dir_all(path).unwrap();
-    gen_dir_under_path(path.to_str().unwrap(), 0);
-}
+    pub fn upper_path(mut self, upper_path: &'a Path) -> Self {
+        self.upper_path = Some(upper_path);
+        self
+    }
 
-fn create_test_dir() {
-    let origin_path = "./test_dir/origin";
-    // create_dir_all(Path::new(origin_path)).unwrap();
-    gen_dir_under_path(origin_path, 0);
-}
+    pub fn build(self) -> Result<TestDirGenerator<'a>, &'static str> {
+        let Self {
+            threshold,
+            max_depth,
+            upper_path,
+        } = self;
 
-fn main() {
-    create_test_dir();
+        if let Some(upper_path) = upper_path {
+            Ok(TestDirGenerator {
+                threshold,
+                max_depth,
+                upper_path,
+            })
+        } else {
+            Err("upper_path not set")
+        }
+    }
 }
