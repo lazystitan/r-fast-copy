@@ -59,9 +59,14 @@ fn gen_dir_under_path(upper_path: &str, mut level: u32) {
     }
 }
 
+pub fn create_test_dir_in_path(path: &Path) {
+    create_dir_all(path).unwrap();
+    gen_dir_under_path(path.to_str().unwrap(), 0);
+}
+
 fn create_test_dir() {
     let origin_path = "./test_dir/origin";
-    create_dir_all(Path::new(origin_path)).unwrap();
+    // create_dir_all(Path::new(origin_path)).unwrap();
     gen_dir_under_path(origin_path, 0);
 }
 

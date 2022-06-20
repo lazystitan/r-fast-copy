@@ -1,10 +1,13 @@
+mod test_gen;
+
+use clap::{Parser, Subcommand};
 use std::fs;
-use std::fs::{create_dir, create_dir_all, File, read_to_string};
+use std::fs::{create_dir_all, read_to_string, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use clap::{Parser, Subcommand};
+use std::str::FromStr;
 
-fn copy_file(from : &Path, to: &Path) {
+fn copy_file(from: &Path, to: &Path) {
     let content = fs::read_to_string(from).unwrap();
     let mut file = fs::File::create(to).unwrap();
     file.write_all(content.as_bytes()).unwrap();
@@ -34,9 +37,7 @@ fn copy_dir_recursive(from: &Path, dest: &Path, depth_path: &PathBuf) {
     for entry in fs::read_dir(read_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        let new_depth_path =
-            depth_path.clone()
-                .join(Path::new(&entry.file_name()));
+        let new_depth_path = depth_path.clone().join(Path::new(&entry.file_name()));
         let creating_path = dest.clone().to_path_buf().join(new_depth_path.clone());
         if path.is_dir() {
             println!("next depth's path: {:?}", new_depth_path);
@@ -52,12 +53,12 @@ fn copy_dir_recursive(from: &Path, dest: &Path, depth_path: &PathBuf) {
 }
 
 #[derive(Subcommand, Debug)]
-enum Test {
-    /// Add
-    Add {
+enum TestCommand {
+    /// generate test folder in path
+    GenTestFolder {
         #[clap(value_parser)]
-        name: Option<String>
-    }
+        path: Option<String>,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -70,8 +71,7 @@ struct Args {
     count: u8,
 
     #[clap(subcommand)]
-    test: Test,
-
+    test_command: TestCommand,
 }
 
 fn main() {
@@ -79,9 +79,24 @@ fn main() {
     for _ in 0..args.count {
         println!("Hello {}!", args.count);
     }
-    match &args.test {
-        Test::Add { name} => {
-            println!("'myapp add' was used, name is: {:?}", name)
+    match &args.test_command {
+        TestCommand::GenTestFolder { path } => {
+            if let Some(path) = path {
+                let path = Path::new(path);
+                println!(
+                    "path: {:?}, exists: {:?}, is_dir: {:?}",
+                    path,
+                    path.exists(),
+                    path.is_dir()
+                );
+                if path.exists() && path.is_dir() {
+                    test_gen::create_test_dir_in_path(path);
+                } else if !path.exists() {
+                    create_dir_all(path).unwrap();
+                    test_gen::create_test_dir_in_path(path);
+                }
+            }
+            println!("invalid path");
         }
     }
     // copy_dir_recursive(Path::new("./test_dir/copy_test_dir"), Path::new("./test_dir/copy_test_dir_copied"), &PathBuf::new());
