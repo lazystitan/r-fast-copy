@@ -4,14 +4,19 @@ use std::thread;
 
 pub type Task = Box<dyn FnOnce() + Send + 'static>;
 
+pub enum Message {
+    NewTask(Task),
+    Terminate
+}
+
 pub struct ThreadPool {
-    tx: Option<Sender<Task>>,
-    handlers: Option<Vec<thread::JoinHandle<()>>>
+    sender: Sender<Message>,
+    handlers: Vec<Option<thread::JoinHandle<()>>>
 }
 
 impl ThreadPool {
     pub fn new(number: usize) -> Self {
-        let (tx, rx) = channel::<Task>();
+        let (tx, rx) = channel::<Message>();
         let mut handlers = vec![];
 
         let lock = Arc::new(Mutex::new(rx));
@@ -21,16 +26,45 @@ impl ThreadPool {
             let handle = thread::spawn(move || {
                 loop {
                     let task = lock.lock().unwrap().recv().unwrap();
-                    task();
+                    match task {
+                        Message::NewTask(task) => {
+                            task();
+                        }
+                        Message::Terminate => {
+                            break;
+                        }
+                    }
                 }
             });
 
-            handlers.push(handle);
+            handlers.push(Some(handle));
         }
 
         ThreadPool {
-            tx: Some(tx),
-            handlers: Some(handlers)
+            sender: tx,
+            handlers
+        }
+    }
+
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static
+    {
+        let task = Box::new(f);
+        self.sender.send(Message::NewTask(task)).unwrap();
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        for _ in &self.handlers {
+            self.sender.send(Message::Terminate).unwrap();
+        }
+
+        for j in &mut self.handlers {
+            if let j = j.take().unwrap() {
+                j.join().unwrap();
+            }
         }
     }
 }
@@ -45,14 +79,10 @@ mod test {
     fn print_test() {
         let p = ThreadPool::new(32);
         for i in 0..128 {
-            p.tx.clone().unwrap().send(Box::new(move || {
+            p.sender.clone().send(Message::NewTask(Box::new(move || {
                 println!("task id {}", i);
                 thread::sleep(Duration::from_secs(1));
-            })).unwrap();
-        }
-
-        for h in p.handlers.unwrap() {
-            h.join().unwrap();
+            }))).unwrap();
         }
     }
 

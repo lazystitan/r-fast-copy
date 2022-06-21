@@ -46,7 +46,7 @@ mod copy_test {
     fn copy_file_test() {
         let from = Path::new("./test_dir/copy_test_dir/origin_file");
         let to = Path::new("./test_dir/copy_test_dir/copied_file1");
-        copy_file(&from, &to);
+        copy_file(&from, &to).unwrap();
         let content_from = fs::read_to_string(&from).unwrap();
         let content_to = fs::read_to_string(&to).unwrap();
         assert_eq!(content_to, content_from);
