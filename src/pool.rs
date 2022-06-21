@@ -9,8 +9,9 @@ pub enum Message {
     Terminate,
 }
 
+
 pub struct ThreadPool {
-    sender: Sender<Message>,
+    pub sender: Sender<Message>,
     handlers: Vec<Option<thread::JoinHandle<()>>>,
 }
 
@@ -21,12 +22,13 @@ impl ThreadPool {
 
         let lock = Arc::new(Mutex::new(rx));
 
-        for _ in 0..number {
+        for id in 0..number {
             let lock = lock.clone();
             let handle = thread::spawn(move || loop {
                 let task = lock.lock().unwrap().recv().unwrap();
                 match task {
                     Message::NewTask(task) => {
+                        println!("Threads {} received new task.", id);
                         task();
                     }
                     Message::Terminate => {
@@ -59,11 +61,14 @@ impl Drop for ThreadPool {
             self.sender.send(Message::Terminate).unwrap();
         }
 
+        println!("All threads received terminate message, waiting join");
+
         for j in &mut self.handlers {
             if let j = j.take().unwrap() {
                 j.join().unwrap();
             }
         }
+        println!("All threads joined, drop.");
     }
 }
 

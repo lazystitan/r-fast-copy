@@ -2,6 +2,8 @@ use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use std::sync::mpsc::Sender;
+use crate::pool::Message;
 
 fn copy_file(from: &Path, to: &Path) -> Result<(), io::Error> {
     let content = fs::read_to_string(from)?;
@@ -10,12 +12,12 @@ fn copy_file(from: &Path, to: &Path) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn copy_dir_recursive(from: &Path, dest: &Path, depth_path: &PathBuf) -> Result<(), io::Error> {
+pub fn copy_dir_recursive(from: PathBuf, dest: PathBuf, depth_path: PathBuf, sender: Sender<Message>) -> Result<(), io::Error> {
     println!("-----------");
     println!("from : {:?}", from);
     println!("dest : {:?}", dest);
     println!("depth_path : {:?}", depth_path);
-    let read_dir = from.clone().to_path_buf().join(depth_path);
+    let read_dir = from.clone().to_path_buf().join(depth_path.clone());
     println!("read_dir : {:?}", read_dir);
     for entry in fs::read_dir(read_dir)? {
         let entry = entry?;
@@ -26,7 +28,21 @@ pub fn copy_dir_recursive(from: &Path, dest: &Path, depth_path: &PathBuf) -> Res
             println!("next depth's path: {:?}", new_depth_path);
             println!("creating path: {:?}", new_depth_path);
             create_dir_all(&creating_path)?;
-            copy_dir_recursive(from, dest, &new_depth_path)?;
+
+            // /*
+            let new_from = from.clone();
+            let new_dest = dest.clone();
+            let new_new_depth_path = new_depth_path.clone();
+            let new_sender = sender.clone();
+            sender.send(
+                Message::NewTask(
+                    Box::new(move || {
+                        copy_dir_recursive(new_from, new_dest, new_new_depth_path, new_sender).unwrap();
+                    })
+                )
+            ).unwrap();
+             // */
+
         } else {
             let read_file = from.clone().to_path_buf().join(new_depth_path.clone());
             println!("creating file : {:?}", creating_path);
