@@ -2,17 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 use std::thread;
 
-pub trait FnBox {
-    fn call_box(self: Box<Self>);
-}
-
-impl <F: FnOnce()> FnBox for F {
-    fn call_box(self: Box<Self>) {
-        (*self)();
-    }
-}
-
-pub type Task = Box<dyn FnBox + Send>;
+pub type Task = Box<dyn FnOnce() + Send + 'static>;
 
 pub struct ThreadPool {
     tx: Option<Sender<Task>>,
@@ -29,9 +19,9 @@ impl ThreadPool {
         for _ in 0..number {
             let lock = lock.clone();
             let handle = thread::spawn(move || {
-                while let Ok(task) = lock.lock().unwrap().recv() {
-                    println!("{:?}", lock );
-                    task.call_box();
+                loop {
+                    let task = lock.lock().unwrap().recv().unwrap();
+                    task();
                 }
             });
 
