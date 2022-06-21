@@ -1,17 +1,17 @@
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 pub type Task = Box<dyn FnOnce() + Send + 'static>;
 
 pub enum Message {
     NewTask(Task),
-    Terminate
+    Terminate,
 }
 
 pub struct ThreadPool {
     sender: Sender<Message>,
-    handlers: Vec<Option<thread::JoinHandle<()>>>
+    handlers: Vec<Option<thread::JoinHandle<()>>>,
 }
 
 impl ThreadPool {
@@ -23,16 +23,14 @@ impl ThreadPool {
 
         for _ in 0..number {
             let lock = lock.clone();
-            let handle = thread::spawn(move || {
-                loop {
-                    let task = lock.lock().unwrap().recv().unwrap();
-                    match task {
-                        Message::NewTask(task) => {
-                            task();
-                        }
-                        Message::Terminate => {
-                            break;
-                        }
+            let handle = thread::spawn(move || loop {
+                let task = lock.lock().unwrap().recv().unwrap();
+                match task {
+                    Message::NewTask(task) => {
+                        task();
+                    }
+                    Message::Terminate => {
+                        break;
                     }
                 }
             });
@@ -42,13 +40,13 @@ impl ThreadPool {
 
         ThreadPool {
             sender: tx,
-            handlers
+            handlers,
         }
     }
 
     pub fn execute<F>(&self, f: F)
     where
-        F: FnOnce() + Send + 'static
+        F: FnOnce() + Send + 'static,
     {
         let task = Box::new(f);
         self.sender.send(Message::NewTask(task)).unwrap();
@@ -69,20 +67,22 @@ impl Drop for ThreadPool {
     }
 }
 
-
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn print_test() {
         let p = ThreadPool::new(32);
         for i in 0..128 {
-            p.sender.clone().send(Message::NewTask(Box::new(move || {
-                println!("task id {}", i);
-                thread::sleep(Duration::from_secs(1));
-            }))).unwrap();
+            p.sender
+                .clone()
+                .send(Message::NewTask(Box::new(move || {
+                    println!("task id {}", i);
+                    thread::sleep(Duration::from_secs(1));
+                })))
+                .unwrap();
         }
     }
 

@@ -1,7 +1,7 @@
-use std::{fs, io};
 use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 fn copy_file(from: &Path, to: &Path) -> Result<(), io::Error> {
     let content = fs::read_to_string(from)?;
@@ -36,7 +36,6 @@ pub fn copy_dir_recursive(from: &Path, dest: &Path, depth_path: &PathBuf) -> Res
 
     Ok(())
 }
-
 
 #[cfg(test)]
 mod copy_test {

@@ -1,11 +1,12 @@
-mod test_gen;
 mod copy;
 mod pool;
+mod test_gen;
 
+use crate::copy::copy_dir_recursive;
 use crate::test_gen::TestDirGenerator;
 use clap::{Parser, Subcommand};
-use std::fs::{create_dir_all};
-use std::path::{Path};
+use std::fs::create_dir_all;
+use std::path::{Path, PathBuf};
 
 #[derive(Subcommand, Debug)]
 enum TestCommand {
@@ -76,14 +77,23 @@ struct Args {
     test_command: Option<TestCommand>,
 }
 
-
-
 fn main() {
     let args = Args::parse();
     if let Some(subcommand) = &args.test_command {
         subcommand.exec();
     }
 
-
-
+    if let Some(from) = &args.from {
+        println!("from: {}", from);
+        match &args.to {
+            Some(to) => {
+                println!("to: {}", to);
+                copy_dir_recursive(Path::new(from), Path::new(to), &PathBuf::new())
+                    .expect("Copy failed");
+            }
+            None => {
+                println!("Not set target");
+            }
+        }
+    }
 }
