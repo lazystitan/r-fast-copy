@@ -1,12 +1,16 @@
 mod copy;
 mod pool;
 mod test_gen;
+mod dir_tree;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use crate::copy::copy_dir_recursive;
 use crate::test_gen::TestDirGenerator;
 use clap::{Parser, Subcommand};
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -114,23 +118,6 @@ fn run() {
     }
 }
 
-fn f1(p: &Path) {}
-
-fn test() {
-    let s: String = thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(5)
-        .map(char::from)
-        .collect();
-    let p = PathBuf::new().join(Path::new(&s));
-
-    let h = thread::spawn(move || {
-        f1(&p);
-    });
-    h.join();
-}
-
 fn main() {
     run();
-    // test();
 }
