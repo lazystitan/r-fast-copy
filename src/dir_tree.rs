@@ -1,16 +1,15 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 // pub type SharedNodeRef = Rc<RefCell<DirNode>>;
 
-pub struct SharedNodeRef(Rc<RefCell<DirNode>>);
+pub struct SharedNodeRef(Arc<RwLock<DirNode>>);
 
 impl SharedNodeRef {
     fn new(n: DirNode) -> Self {
-        Self(Rc::new(RefCell::new(n)))
+        Self(Arc::new(RwLock::new(n)))
     }
 }
 
@@ -30,7 +29,14 @@ impl Clone for SharedNodeRef {
 
 impl PartialEq for SharedNodeRef {
     fn eq(&self, other: &Self) -> bool {
-        self.0.borrow().path() == other.0.borrow().path()
+        let self_arc = self.0.clone();
+        let self_reader = self_arc.read().unwrap();
+        let self_path = self_reader.path();
+
+        let other_arc = other.0.clone();
+        let other_reader = other_arc.read().unwrap();
+        let other_path = other_reader.path();
+        self_path == other_path
     }
 }
 
@@ -38,7 +44,7 @@ impl Eq for SharedNodeRef {}
 
 impl Hash for SharedNodeRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.borrow().path().hash(state);
+        self.0.read().unwrap().path().hash(state);
     }
 }
 
@@ -60,7 +66,7 @@ impl DirNode {
     }
 
     fn add_sub_nodes(&mut self, node: SharedNodeRef) {
-        let key = node.0.borrow().path().to_str().unwrap().to_string();
+        let key = node.0.read().unwrap().path().to_str().unwrap().to_string();
         self._sub_nodes.insert(key, node);
     }
 
@@ -83,7 +89,8 @@ impl DirNode {
     fn check_all_copied(&mut self) -> bool {
         self._sub_nodes.retain(|_k, r| {
             //delete those nodes that had been copied
-            !r.0.borrow_mut().check_all_copied()
+            let mut writer = r.0.write().unwrap();
+            !writer.check_all_copied()
         });
         return self._sub_nodes.is_empty() && self.is_copied();
     }
@@ -92,8 +99,9 @@ impl DirNode {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::cell::RefMut;
+    use std::cell::{RefCell, RefMut};
     use std::collections::HashMap;
+    use std::rc::Rc;
 
     #[test]
     fn tree_test() {
@@ -104,48 +112,52 @@ mod test {
             let p = PathBuf::from("./test_dir/tree/c".to_string() + &i.to_string());
             let mut tn = DirNode::new(p);
             tn.set_parent(root_rc.clone());
-            root_rc.0.borrow_mut().add_sub_nodes(SharedNodeRef::new(tn));
+            root_rc
+                .0
+                .write()
+                .unwrap()
+                .add_sub_nodes(SharedNodeRef::new(tn));
         }
 
         let new_r = root_rc.clone();
-        let sub_r = new_r.0.borrow();
+        let sub_r = new_r.0.read().unwrap();
         let r2 = sub_r._sub_nodes.get("./test_dir/tree/c2").unwrap();
 
         for i in 0..5 {
             let p = PathBuf::from("./test_dir/tree/c2/d".to_string() + &i.to_string());
             let mut tn = DirNode::new(p);
             tn.set_parent(r2.clone());
-            r2.0.borrow_mut().add_sub_nodes(SharedNodeRef::new(tn));
+            r2.0.write().unwrap().add_sub_nodes(SharedNodeRef::new(tn));
         }
         drop(sub_r);
 
         println!("start");
 
-        for (_key, r) in &root_rc.0.borrow()._sub_nodes {
-            println!("sub node {:?}", r.0.borrow().path());
-            if !r.0.borrow()._sub_nodes.is_empty() {
+        for (_key, r) in &root_rc.0.read().unwrap()._sub_nodes {
+            println!("sub node {:?}", r.0.read().unwrap().path());
+            if !r.0.read().unwrap()._sub_nodes.is_empty() {
                 println!("-------------");
-                for (_key2, r2) in &r.0.borrow()._sub_nodes {
-                    println!("sub node {:?}", r2.0.borrow().path());
-                    r2.0.borrow_mut().copied();
+                for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
+                    println!("sub node {:?}", r2.0.read().unwrap().path());
+                    r2.0.write().unwrap().copied();
                 }
                 println!("-------------");
-                let mut r_bm = r.0.borrow_mut();
+                let mut r_bm = r.0.write().unwrap();
                 r_bm.copied();
             }
         }
 
         // let new_r = new_r.clone();
-        new_r.0.borrow_mut().check_all_copied();
+        new_r.0.write().unwrap().check_all_copied();
 
         println!("------change-------");
 
-        for (_key, r) in &root_rc.0.borrow()._sub_nodes {
-            println!("sub node {:?}", r.0.borrow().path());
-            if !r.0.borrow()._sub_nodes.is_empty() {
+        for (_key, r) in &root_rc.0.read().unwrap()._sub_nodes {
+            println!("sub node {:?}", r.0.read().unwrap().path());
+            if !r.0.read().unwrap()._sub_nodes.is_empty() {
                 println!("-------------");
-                for (_key2, r2) in &r.0.borrow()._sub_nodes {
-                    println!("sub node {:?}", r2.0.borrow().path());
+                for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
+                    println!("sub node {:?}", r2.0.read().unwrap().path());
                 }
                 println!("-------------");
             }
