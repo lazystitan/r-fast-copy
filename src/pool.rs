@@ -9,7 +9,6 @@ pub enum Message {
     Terminate,
 }
 
-
 pub struct ThreadPool {
     pub sender: Sender<Message>,
     handlers: Vec<Option<thread::JoinHandle<()>>>,

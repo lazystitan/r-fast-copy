@@ -1,7 +1,6 @@
-use std::cell::{Cell, Ref, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -10,7 +9,7 @@ use std::rc::Rc;
 pub struct SharedNodeRef(Rc<RefCell<DirNode>>);
 
 impl SharedNodeRef {
-    fn new(n: DirNode) -> Self{
+    fn new(n: DirNode) -> Self {
         Self(Rc::new(RefCell::new(n)))
     }
 }
@@ -20,7 +19,6 @@ impl Clone for SharedNodeRef {
         Self(self.0.clone())
     }
 }
-
 
 // impl Deref for SharedNodeRef {
 //     type Target = Rc<RefCell<DirNode>>;
@@ -44,12 +42,11 @@ impl Hash for SharedNodeRef {
     }
 }
 
-// #[derive(Debug)] //TODO overflowed
 pub struct DirNode {
     _parent: Option<SharedNodeRef>,
     _path: PathBuf,
     _is_copied: bool,
-    _sub_nodes: HashMap<String,SharedNodeRef>
+    _sub_nodes: HashMap<String, SharedNodeRef>,
 }
 
 impl DirNode {
@@ -58,7 +55,7 @@ impl DirNode {
             _parent: None,
             _path: path,
             _is_copied: false,
-            _sub_nodes: HashMap::new()
+            _sub_nodes: HashMap::new(),
         }
     }
 
@@ -84,7 +81,7 @@ impl DirNode {
     }
 
     fn check_all_copied(&mut self) -> bool {
-        self._sub_nodes.retain(|k, mut r| {
+        self._sub_nodes.retain(|_k, r| {
             //delete those nodes that had been copied
             !r.0.borrow_mut().check_all_copied()
         });
@@ -92,13 +89,11 @@ impl DirNode {
     }
 }
 
-
 #[cfg(test)]
 mod test {
-    // use std::borrow::BorrowMut;
+    use super::*;
     use std::cell::RefMut;
     use std::collections::HashMap;
-    use super::*;
 
     #[test]
     fn tree_test() {
@@ -116,7 +111,6 @@ mod test {
         let sub_r = new_r.0.borrow();
         let r2 = sub_r._sub_nodes.get("./test_dir/tree/c2").unwrap();
 
-
         for i in 0..5 {
             let p = PathBuf::from("./test_dir/tree/c2/d".to_string() + &i.to_string());
             let mut tn = DirNode::new(p);
@@ -127,11 +121,11 @@ mod test {
 
         println!("start");
 
-        for (key, r) in &root_rc.0.borrow()._sub_nodes {
+        for (_key, r) in &root_rc.0.borrow()._sub_nodes {
             println!("sub node {:?}", r.0.borrow().path());
             if !r.0.borrow()._sub_nodes.is_empty() {
                 println!("-------------");
-                for (key2, r2)  in &r.0.borrow()._sub_nodes {
+                for (_key2, r2) in &r.0.borrow()._sub_nodes {
                     println!("sub node {:?}", r2.0.borrow().path());
                     r2.0.borrow_mut().copied();
                 }
@@ -146,11 +140,11 @@ mod test {
 
         println!("------change-------");
 
-        for (key, r) in &root_rc.0.borrow()._sub_nodes {
+        for (_key, r) in &root_rc.0.borrow()._sub_nodes {
             println!("sub node {:?}", r.0.borrow().path());
             if !r.0.borrow()._sub_nodes.is_empty() {
                 println!("-------------");
-                for (key2, r2)  in &r.0.borrow()._sub_nodes {
+                for (_key2, r2) in &r.0.borrow()._sub_nodes {
                     println!("sub node {:?}", r2.0.borrow().path());
                 }
                 println!("-------------");
@@ -162,14 +156,13 @@ mod test {
 
     #[test]
     fn ref_cell_test() {
-        let mut shared_map: Rc<RefCell<_>> = Rc::new(RefCell::new(HashMap::new()));
+        let shared_map: Rc<RefCell<_>> = Rc::new(RefCell::new(HashMap::new()));
         let mut map: RefMut<_> = (*shared_map).borrow_mut();
         map.insert("africa", 92388);
         map.insert("kyoto", 11837);
         map.insert("piccadilly", 11826);
         map.insert("marbles", 38);
         println!("{:?}", shared_map);
-
 
         let shared_map: Rc<RefCell<_>> = Rc::new(RefCell::new(HashMap::new()));
         shared_map.borrow_mut().insert("africa", 92388);
