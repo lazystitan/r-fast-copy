@@ -103,8 +103,13 @@ mod test {
     use std::collections::HashMap;
     use std::rc::Rc;
 
-    #[test]
-    fn tree_test() {
+    //build test tree
+    //  ----------------------------------<tree> --------------------------------------
+    //  |       |                            |                               |         |
+    // <c0>    <c1>      ------------------ <c2> --------------------       <c3>      <c4>
+    //                   |          |         |         |           |
+    //                  <d0>      <d1>      <d2>       <d3>        <d4>
+    fn build_tree() -> SharedNodeRef {
         let r = DirNode::new(PathBuf::from(String::from("./test_dir/tree")));
         let root_rc = SharedNodeRef::new(r);
 
@@ -130,29 +135,89 @@ mod test {
             r2.0.write().unwrap().add_sub_nodes(SharedNodeRef::new(tn));
         }
         drop(sub_r);
+        root_rc
+    }
+
+    //Single thread test
+    #[test]
+    fn tree_test() {
+
+        let root = build_tree();
 
         println!("start");
 
-        for (_key, r) in &root_rc.0.read().unwrap()._sub_nodes {
-            println!("sub node {:?}", r.0.read().unwrap().path());
-            if !r.0.read().unwrap()._sub_nodes.is_empty() {
+        for (_key, r) in &root.0.read().unwrap()._sub_nodes {
+            let reader = r.0.read().unwrap();
+            println!("sub node {:?}", reader.path());
+            if !reader._sub_nodes.is_empty() {
+                drop(reader);
+
+                let mut writer = r.0.write().unwrap();
+                writer.copied();
+                drop(writer);
+
                 println!("-------------");
+
                 for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
                     println!("sub node {:?}", r2.0.read().unwrap().path());
                     r2.0.write().unwrap().copied();
                 }
                 println!("-------------");
-                let mut r_bm = r.0.write().unwrap();
-                r_bm.copied();
             }
         }
 
         // let new_r = new_r.clone();
-        new_r.0.write().unwrap().check_all_copied();
+        root.0.write().unwrap().check_all_copied();
 
         println!("------change-------");
 
-        for (_key, r) in &root_rc.0.read().unwrap()._sub_nodes {
+        for (_key, r) in &root.0.read().unwrap()._sub_nodes {
+            println!("sub node {:?}", r.0.read().unwrap().path());
+            if !r.0.read().unwrap()._sub_nodes.is_empty() {
+                println!("-------------");
+                for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
+                    println!("sub node {:?}", r2.0.read().unwrap().path());
+                }
+                println!("-------------");
+            }
+        }
+
+        println!("done");
+    }
+
+
+    #[test]
+    fn tree_test_multi_threads() {
+        let root = build_tree();
+
+        println!("tree built, start test");
+
+        for (_key, r) in &root.0.read().unwrap()._sub_nodes {
+            let reader = r.0.read().unwrap();
+            println!("sub node {:?}", reader.path());
+            if !reader._sub_nodes.is_empty() {
+                drop(reader);
+
+                let mut writer = r.0.write().unwrap();
+                writer.copied();
+                drop(writer);
+
+                println!("-------------");
+
+                for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
+                    println!("sub node {:?}", r2.0.read().unwrap().path());
+                    r2.0.write().unwrap().copied();
+                }
+                println!("-------------");
+            }
+        }
+
+        // let new_r = new_r.clone();
+        root.0.write().unwrap().check_all_copied();
+
+        println!("------change-------");
+
+        for (_key, r) in &root.0.read().unwrap()._sub_nodes {
             println!("sub node {:?}", r.0.read().unwrap().path());
             if !r.0.read().unwrap()._sub_nodes.is_empty() {
                 println!("-------------");
