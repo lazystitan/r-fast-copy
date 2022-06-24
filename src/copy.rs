@@ -13,6 +13,34 @@ fn copy_file(from: &Path, to: &Path) -> Result<(), io::Error> {
     Ok(())
 }
 
+pub fn copy_dir_recursive_single_thread(from: &Path, dest: &Path, depth_path: &PathBuf) -> Result<(), io::Error> {
+    println!("-----------");
+    println!("from : {:?}", from);
+    println!("dest : {:?}", dest);
+    println!("depth_path : {:?}", depth_path);
+    let read_dir = from.clone().to_path_buf().join(depth_path);
+    println!("read_dir : {:?}", read_dir);
+    for entry in fs::read_dir(read_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let new_depth_path = depth_path.clone().join(Path::new(&entry.file_name()));
+        let creating_path = dest.clone().to_path_buf().join(new_depth_path.clone());
+        if path.is_dir() {
+            println!("next depth's path: {:?}", new_depth_path);
+            println!("creating path: {:?}", new_depth_path);
+            create_dir_all(&creating_path)?;
+            copy_dir_recursive_single_thread(from, dest, &new_depth_path)?;
+        } else {
+            let read_file = from.clone().to_path_buf().join(new_depth_path.clone());
+            println!("creating file : {:?}", creating_path);
+            copy_file(read_file.as_path(), creating_path.as_path())?;
+        }
+    }
+
+    Ok(())
+}
+
+
 pub fn copy_dir_recursive(
     from: PathBuf,
     dest: PathBuf,
