@@ -5,10 +5,10 @@ use std::sync::{Arc, RwLock};
 
 // pub type SharedNodeRef = Rc<RefCell<DirNode>>;
 
-pub struct SharedNodeRef(Arc<RwLock<DirNode>>);
+pub struct SharedNodeRef(pub Arc<RwLock<DirNode>>);
 
 impl SharedNodeRef {
-    fn new(n: DirNode) -> Self {
+    pub fn new(n: DirNode) -> Self {
         Self(Arc::new(RwLock::new(n)))
     }
 }
@@ -49,14 +49,14 @@ impl Hash for SharedNodeRef {
 }
 
 pub struct DirNode {
-    _parent: Option<SharedNodeRef>,
+    pub(crate) _parent: Option<SharedNodeRef>,
     _path: PathBuf,
     _is_copied: bool,
     _sub_nodes: HashMap<String, SharedNodeRef>,
 }
 
 impl DirNode {
-    fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         Self {
             _parent: None,
             _path: path,
@@ -65,20 +65,26 @@ impl DirNode {
         }
     }
 
-    fn add_sub_nodes(&mut self, node: SharedNodeRef) {
+    pub fn add_sub_nodes(&mut self, node: SharedNodeRef) {
         let key = node.0.read().unwrap().path().to_str().unwrap().to_string();
         self._sub_nodes.insert(key, node);
     }
 
-    fn this_node_copied(&mut self) {
+    pub fn this_node_copied(&mut self) {
         //if leaf
         if self._sub_nodes.is_empty() {
-            println!("{:?} has no children, is leaf. Set copied true.", self._path);
+            println!(
+                "{:?} has no children, is leaf. Set copied true.",
+                self._path
+            );
             self._is_copied = true;
             return;
         }
         //try delete children
-        println!("{:?} has children, is not leaf, try delete children.", self._path);
+        println!(
+            "{:?} has children, is not leaf, try delete children.",
+            self._path
+        );
         self._sub_nodes.retain(|_k, r| {
             //delete those nodes that had been copied
             let read = r.0.read().unwrap();
@@ -91,21 +97,27 @@ impl DirNode {
         self._is_copied = self._sub_nodes.is_empty();
 
         if self._is_copied {
-            println!("{:?} has no children after delete, is leaf. return.", self._path);
+            println!(
+                "{:?} has no children after delete, is leaf. return.",
+                self._path
+            );
         } else {
-            println!("{:?} has children after delete, is not leaf. return.", self._path);
+            println!(
+                "{:?} has children after delete, is not leaf. return.",
+                self._path
+            );
         }
     }
 
-    fn is_copied(&self) -> bool {
+    pub fn is_copied(&self) -> bool {
         return self._is_copied;
     }
 
-    fn set_parent(&mut self, p: SharedNodeRef) {
+    pub fn set_parent(&mut self, p: SharedNodeRef) {
         self._parent = Some(p);
     }
 
-    fn path(&self) -> &PathBuf {
+    pub fn path(&self) -> &PathBuf {
         &self._path
     }
 
@@ -127,7 +139,7 @@ mod test {
     use std::cell::{RefCell, RefMut};
     use std::collections::HashMap;
     use std::rc::Rc;
-    use std::sync::{RwLockReadGuard, TryLockError, TryLockResult};
+    use std::sync::TryLockError;
     use std::thread;
     use std::time::Duration;
 
@@ -169,14 +181,12 @@ mod test {
     //Single thread test
     #[test]
     fn tree_test_threads() {
-
         let root = build_tree();
         let mut handlers = vec![];
 
         println!("start");
 
         for (_key, r) in &root.0.read().unwrap()._sub_nodes {
-
             let shared_node = r.0.clone();
             handlers.push(thread::spawn(move || {
                 let mut writer = shared_node.write().unwrap();
@@ -238,12 +248,10 @@ mod test {
                         break;
                     }
                 }
-                Err(e) => {
-                    match e {
-                        TryLockError::Poisoned(_) => {}
-                        TryLockError::WouldBlock => {}
-                    }
-                }
+                Err(e) => match e {
+                    TryLockError::Poisoned(_) => {}
+                    TryLockError::WouldBlock => {}
+                },
             }
             thread::sleep(Duration::from_millis(50));
         }
@@ -253,10 +261,7 @@ mod test {
         }
 
         println!("done.");
-
-
     }
-
 
     #[test]
     fn tree_test_multi() {

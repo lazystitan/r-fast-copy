@@ -9,7 +9,9 @@ use crate::test_gen::TestDirGenerator;
 use clap::{Parser, Subcommand};
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
+use crate::dir_tree::{DirNode, SharedNodeRef};
 
 #[derive(Subcommand, Debug)]
 enum TestCommand {
@@ -97,13 +99,32 @@ fn run() {
                 let pool = ThreadPool::new(args.thread);
                 let sender = pool.sender.clone();
                 let now = Instant::now();
+                let root = SharedNodeRef::new(DirNode::new(PathBuf::from(to)));
                 copy_dir_recursive(
                     PathBuf::from(from),
                     PathBuf::from(to),
                     PathBuf::new(),
                     sender,
+                    root.clone()
                 )
                 .expect("Copy failed");
+
+                println!("Waiting copy stop...");
+                loop {
+                    println!("in loop");
+                    match root.0.try_read() {
+                        Ok(reader) => {
+                            if reader.is_copied() {
+                                println!("Copy complete.");
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            println!("{:?}", e);
+                        },
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
                 let elapsed_time = now.elapsed();
                 println!("Copy action took {} milliseconds", elapsed_time.as_millis());
             }
