@@ -70,8 +70,34 @@ impl DirNode {
         self._sub_nodes.insert(key, node);
     }
 
-    fn copied(&mut self) {
-        self._is_copied = true;
+    fn this_node_copied(&mut self) {
+        //if leaf
+        if self._sub_nodes.is_empty() {
+            println!("{:?} has no children, is leaf, lookup", self._path);
+            self._is_copied = true;
+            self.lookup();
+            return;
+        }
+        //try delete children
+        println!("{:?} has children, is not leaf, try delete", self._path);
+        self._sub_nodes.retain(|_k, r| {
+            //delete those nodes that had been copied
+            let read = r.0.read().unwrap();
+            println!("{:?} has read lock", read._path);
+            let r = !read.is_copied();
+            println!("{:?}'s read lock drop", read._path);
+            drop(read);
+            r
+        });
+        self._is_copied = self._sub_nodes.is_empty();
+
+        if self._is_copied {
+            println!("{:?} has no children after delete, is leaf, lookup", self._path);
+            self.lookup();
+            return;
+        }
+
+        println!("{:?} has children after delete, is not leaf", self._path);
     }
 
     fn is_copied(&self) -> bool {
@@ -87,12 +113,14 @@ impl DirNode {
     }
 
     fn check_all_copied(&mut self) -> bool {
-        self._sub_nodes.retain(|_k, r| {
-            //delete those nodes that had been copied
-            let mut writer = r.0.write().unwrap();
-            !writer.check_all_copied()
-        });
-        return self._sub_nodes.is_empty() && self.is_copied();
+        return self.is_copied();
+    }
+
+    fn lookup(&self) {
+        if let Some(p) = &self._parent {
+            let mut writer = p.0.write().unwrap();
+            writer.this_node_copied();
+        }
     }
 }
 
@@ -102,6 +130,9 @@ mod test {
     use std::cell::{RefCell, RefMut};
     use std::collections::HashMap;
     use std::rc::Rc;
+    use std::sync::{RwLockReadGuard, TryLockError, TryLockResult};
+    use std::thread;
+    use std::time::Duration;
 
     //build test tree
     //  ----------------------------------<tree> --------------------------------------
@@ -140,54 +171,66 @@ mod test {
 
     //Single thread test
     #[test]
-    fn tree_test() {
+    fn tree_test_threads() {
 
         let root = build_tree();
+        let mut handlers = vec![];
 
         println!("start");
 
         for (_key, r) in &root.0.read().unwrap()._sub_nodes {
+
+            let shared_node = r.0.clone();
+            handlers.push(thread::spawn(move || {
+                let mut writer = shared_node.write().unwrap();
+                writer.this_node_copied();
+            }));
+
             let reader = r.0.read().unwrap();
-            println!("sub node {:?}", reader.path());
             if !reader._sub_nodes.is_empty() {
-                drop(reader);
-
-                let mut writer = r.0.write().unwrap();
-                writer.copied();
-                drop(writer);
-
-                println!("-------------");
-
-                for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
-                    println!("sub node {:?}", r2.0.read().unwrap().path());
-                    r2.0.write().unwrap().copied();
+                for (_, r) in &reader._sub_nodes {
+                    let shared_node = r.0.clone();
+                    handlers.push(thread::spawn(move || {
+                        let mut writer = shared_node.write().unwrap();
+                        writer.this_node_copied();
+                    }))
                 }
-                println!("-------------");
             }
         }
 
         // let new_r = new_r.clone();
-        root.0.write().unwrap().check_all_copied();
+        // root.0.write().unwrap().check_all_copied();
 
-        println!("------change-------");
-
-        for (_key, r) in &root.0.read().unwrap()._sub_nodes {
-            println!("sub node {:?}", r.0.read().unwrap().path());
-            if !r.0.read().unwrap()._sub_nodes.is_empty() {
-                println!("-------------");
-                for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
-                    println!("sub node {:?}", r2.0.read().unwrap().path());
+        println!("Waiting copy stop...");
+        loop {
+            println!("in loop");
+            match root.0.try_read() {
+                Ok(_) => {
+                    println!("Copy complete.");
+                    break;
                 }
-                println!("-------------");
+                Err(e) => {
+                    match e {
+                        TryLockError::Poisoned(_) => {}
+                        TryLockError::WouldBlock => {}
+                    }
+                }
             }
+            thread::sleep(Duration::from_millis(50));
         }
 
-        println!("done");
+        for h in handlers {
+            h.join().unwrap();
+        }
+
+        println!("done.");
+
+
     }
 
 
     #[test]
-    fn tree_test_multi_threads() {
+    fn tree_test_multi() {
         let root = build_tree();
 
         println!("tree built, start test");
@@ -199,14 +242,14 @@ mod test {
                 drop(reader);
 
                 let mut writer = r.0.write().unwrap();
-                writer.copied();
+                writer.this_node_copied();
                 drop(writer);
 
                 println!("-------------");
 
                 for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
                     println!("sub node {:?}", r2.0.read().unwrap().path());
-                    r2.0.write().unwrap().copied();
+                    r2.0.write().unwrap().this_node_copied();
                 }
                 println!("-------------");
             }
