@@ -155,6 +155,10 @@ fn run() {
     }
 }
 
+//threas    first time  second time average boost
+//16	    14879       15123       15001 	51%
+// 4	    16620       18419       17519.5	29%
+// s	    21401       23953       22677	0%
 fn main() {
     run();
 }
