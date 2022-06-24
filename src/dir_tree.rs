@@ -73,13 +73,12 @@ impl DirNode {
     fn this_node_copied(&mut self) {
         //if leaf
         if self._sub_nodes.is_empty() {
-            println!("{:?} has no children, is leaf, lookup", self._path);
+            println!("{:?} has no children, is leaf. Set copied true.", self._path);
             self._is_copied = true;
-            self.lookup();
             return;
         }
         //try delete children
-        println!("{:?} has children, is not leaf, try delete", self._path);
+        println!("{:?} has children, is not leaf, try delete children.", self._path);
         self._sub_nodes.retain(|_k, r| {
             //delete those nodes that had been copied
             let read = r.0.read().unwrap();
@@ -91,13 +90,7 @@ impl DirNode {
         });
         self._is_copied = self._sub_nodes.is_empty();
 
-        if self._is_copied {
-            println!("{:?} has no children after delete, is leaf, lookup", self._path);
-            self.lookup();
-            return;
-        }
-
-        println!("{:?} has children after delete, is not leaf", self._path);
+        println!("{:?} has children after delete, is not leaf. return.", self._path);
     }
 
     fn is_copied(&self) -> bool {
@@ -137,15 +130,15 @@ mod test {
     //build test tree
     //  ----------------------------------<tree> --------------------------------------
     //  |       |                            |                               |         |
-    // <c0>    <c1>      ------------------ <c2> --------------------       <c3>      <c4>
+    // <A1>    <A2>      ------------------ <A3> --------------------       <A4>      <A5>
     //                   |          |         |         |           |
-    //                  <d0>      <d1>      <d2>       <d3>        <d4>
+    //                  <B1>      <B2>      <B3>       <B4>        <B5>
     fn build_tree() -> SharedNodeRef {
         let r = DirNode::new(PathBuf::from(String::from("./test_dir/tree")));
         let root_rc = SharedNodeRef::new(r);
 
         for i in 0..5 {
-            let p = PathBuf::from("./test_dir/tree/c".to_string() + &i.to_string());
+            let p = PathBuf::from("./test_dir/tree/A".to_string() + &(i + 1).to_string());
             let mut tn = DirNode::new(p);
             tn.set_parent(root_rc.clone());
             root_rc
@@ -157,10 +150,10 @@ mod test {
 
         let new_r = root_rc.clone();
         let sub_r = new_r.0.read().unwrap();
-        let r2 = sub_r._sub_nodes.get("./test_dir/tree/c2").unwrap();
+        let r2 = sub_r._sub_nodes.get("./test_dir/tree/A2").unwrap();
 
         for i in 0..5 {
-            let p = PathBuf::from("./test_dir/tree/c2/d".to_string() + &i.to_string());
+            let p = PathBuf::from("./test_dir/tree/c2/B".to_string() + &(i + 1).to_string());
             let mut tn = DirNode::new(p);
             tn.set_parent(r2.clone());
             r2.0.write().unwrap().add_sub_nodes(SharedNodeRef::new(tn));
@@ -184,6 +177,18 @@ mod test {
             handlers.push(thread::spawn(move || {
                 let mut writer = shared_node.write().unwrap();
                 writer.this_node_copied();
+                drop(writer);
+                let reader = shared_node.read().unwrap();
+                let mut p = None;
+                if let Some(inner_p) = &reader._parent {
+                    p = Some(inner_p.clone());
+                }
+                println!("lookup {:?}", reader.path());
+                drop(reader);
+                if let Some(p) = p {
+                    let mut writer = p.0.write().unwrap();
+                    writer.this_node_copied();
+                }
             }));
 
             let reader = r.0.read().unwrap();
@@ -193,6 +198,18 @@ mod test {
                     handlers.push(thread::spawn(move || {
                         let mut writer = shared_node.write().unwrap();
                         writer.this_node_copied();
+                        drop(writer);
+                        let reader = shared_node.read().unwrap();
+                        let mut p = None;
+                        if let Some(inner_p) = &reader._parent {
+                            p = Some(inner_p.clone());
+                        }
+                        println!("lookup {:?}", reader.path());
+                        drop(reader);
+                        if let Some(p) = p {
+                            let mut writer = p.0.write().unwrap();
+                            writer.this_node_copied();
+                        }
                     }))
                 }
             }
