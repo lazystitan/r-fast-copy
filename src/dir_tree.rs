@@ -82,15 +82,19 @@ impl DirNode {
         self._sub_nodes.retain(|_k, r| {
             //delete those nodes that had been copied
             let read = r.0.read().unwrap();
-            println!("{:?} has read lock", read._path);
+            println!("{:?} has read lock when judge if to delete", read._path);
             let r = !read.is_copied();
-            println!("{:?}'s read lock drop", read._path);
+            println!("{:?}'s read lock drop when judge if to delete", read._path);
             drop(read);
             r
         });
         self._is_copied = self._sub_nodes.is_empty();
 
-        println!("{:?} has children after delete, is not leaf. return.", self._path);
+        if self._is_copied {
+            println!("{:?} has no children after delete, is leaf. return.", self._path);
+        } else {
+            println!("{:?} has children after delete, is not leaf. return.", self._path);
+        }
     }
 
     fn is_copied(&self) -> bool {
@@ -150,10 +154,10 @@ mod test {
 
         let new_r = root_rc.clone();
         let sub_r = new_r.0.read().unwrap();
-        let r2 = sub_r._sub_nodes.get("./test_dir/tree/A2").unwrap();
+        let r2 = sub_r._sub_nodes.get("./test_dir/tree/A3").unwrap();
 
         for i in 0..5 {
-            let p = PathBuf::from("./test_dir/tree/c2/B".to_string() + &(i + 1).to_string());
+            let p = PathBuf::from("./test_dir/tree/A3/B".to_string() + &(i + 1).to_string());
             let mut tn = DirNode::new(p);
             tn.set_parent(r2.clone());
             r2.0.write().unwrap().add_sub_nodes(SharedNodeRef::new(tn));
@@ -179,15 +183,18 @@ mod test {
                 writer.this_node_copied();
                 drop(writer);
                 let reader = shared_node.read().unwrap();
-                let mut p = None;
-                if let Some(inner_p) = &reader._parent {
-                    p = Some(inner_p.clone());
-                }
-                println!("lookup {:?}", reader.path());
-                drop(reader);
-                if let Some(p) = p {
-                    let mut writer = p.0.write().unwrap();
-                    writer.this_node_copied();
+                let lookup_flag = reader.is_copied();
+                if lookup_flag {
+                    let mut p = None;
+                    if let Some(inner_p) = &reader._parent {
+                        p = Some(inner_p.clone());
+                    }
+                    println!("lookup {:?}", reader.path());
+                    drop(reader);
+                    if let Some(p) = p {
+                        let mut writer = p.0.write().unwrap();
+                        writer.this_node_copied();
+                    }
                 }
             }));
 
@@ -200,15 +207,18 @@ mod test {
                         writer.this_node_copied();
                         drop(writer);
                         let reader = shared_node.read().unwrap();
-                        let mut p = None;
-                        if let Some(inner_p) = &reader._parent {
-                            p = Some(inner_p.clone());
-                        }
-                        println!("lookup {:?}", reader.path());
-                        drop(reader);
-                        if let Some(p) = p {
-                            let mut writer = p.0.write().unwrap();
-                            writer.this_node_copied();
+                        let lookup_flag = reader.is_copied();
+                        if lookup_flag {
+                            let mut p = None;
+                            if let Some(inner_p) = &reader._parent {
+                                p = Some(inner_p.clone());
+                            }
+                            println!("lookup {:?}", reader.path());
+                            drop(reader);
+                            if let Some(p) = p {
+                                let mut writer = p.0.write().unwrap();
+                                writer.this_node_copied();
+                            }
                         }
                     }))
                 }
@@ -222,9 +232,11 @@ mod test {
         loop {
             println!("in loop");
             match root.0.try_read() {
-                Ok(_) => {
-                    println!("Copy complete.");
-                    break;
+                Ok(reader) => {
+                    if reader.is_copied() {
+                        println!("Copy complete.");
+                        break;
+                    }
                 }
                 Err(e) => {
                     match e {
