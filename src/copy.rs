@@ -67,24 +67,37 @@ pub fn copy_dir_recursive(
 
     let mut writer = parent_node.0.write().unwrap();
     println!("start lookup {:?}", writer.path());
-    writer.this_node_copied();
+    writer.this_node_copied(); //当前node的父node检查
     drop(writer);
 
     let reader = parent_node.0.read().unwrap();
-    let lookup_flag = reader.is_copied();
-    if lookup_flag {
-        let mut p = None;
-        if let Some(inner_p) = &reader._parent {
-            p = Some(inner_p.clone());
-        }
-        println!("lookup {:?}", reader.path());
-        drop(reader);
-        if let Some(p) = p {
-            let mut writer = p.0.write().unwrap();
-            writer.this_node_copied();
-        }
-    }
+    let mut lookup_flag = reader.is_copied();
 
+    let mut may_parent = None;
+
+    if let Some(p) = &reader._parent{
+        may_parent = Some(p.clone());
+    }
+    drop(reader);
+
+    loop {
+        if lookup_flag && may_parent.is_some() {
+            let parent = may_parent.take().unwrap();
+            let mut writer = parent.0.write().unwrap();
+            writer.this_node_copied();
+            drop(writer);
+
+            let reader = parent.0.read().unwrap();
+            lookup_flag = reader.is_copied();
+
+            if let Some(p) = &reader._parent{
+                may_parent = Some(p.clone());
+            }
+        } else {
+            break;
+        }
+
+    }
     Ok(())
 }
 
