@@ -4,6 +4,7 @@ mod pool;
 mod test_gen;
 
 use crate::copy::{copy_dir_recursive, copy_dir_recursive_single_thread};
+use crate::dir_tree::{DirNode, SharedNodeRef};
 use crate::pool::ThreadPool;
 use crate::test_gen::TestDirGenerator;
 use clap::{Parser, Subcommand};
@@ -11,7 +12,6 @@ use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
-use crate::dir_tree::{DirNode, SharedNodeRef};
 
 #[derive(Subcommand, Debug)]
 enum TestCommand {
@@ -97,14 +97,15 @@ fn multi_threads_copy(from: &str, to: &str, thread_number: usize) {
         PathBuf::from(to),
         PathBuf::new(),
         sender,
-        root.clone()
+        root.clone(),
     )
-        .expect("Copy failed");
+    .expect("Copy failed");
 
     println!("Waiting copy stop...");
+    // This loop check if root directory node is copied, which only possible when all children (and
+    // children of children, and so on...) of root is copied.
     loop {
-        println!("in loop");
-        match root.0.try_read() {
+        match root.inner().try_read() {
             Ok(reader) => {
                 if reader.is_copied() {
                     println!("Copy complete.");
@@ -113,12 +114,15 @@ fn multi_threads_copy(from: &str, to: &str, thread_number: usize) {
             }
             Err(e) => {
                 println!("{:?}", e);
-            },
+            }
         }
         thread::sleep(Duration::from_millis(50));
     }
     let elapsed_time = now.elapsed();
-    println!("Copy action took {} milliseconds", elapsed_time.as_millis());
+    println!(
+        "Copy action took {} milliseconds.",
+        elapsed_time.as_millis()
+    );
 }
 
 fn single_thread_copy(from: &str, to: &str) {
@@ -128,7 +132,6 @@ fn single_thread_copy(from: &str, to: &str) {
     let elapsed_time = now.elapsed();
     println!("Copy action took {} milliseconds", elapsed_time.as_millis());
 }
-
 
 fn run() {
     let args = Args::parse();

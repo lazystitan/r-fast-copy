@@ -3,13 +3,16 @@ use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-// pub type SharedNodeRef = Rc<RefCell<DirNode>>;
-
-pub struct SharedNodeRef(pub Arc<RwLock<DirNode>>);
+// Wrapper of reference of node for convenience.
+pub struct SharedNodeRef(Arc<RwLock<DirNode>>);
 
 impl SharedNodeRef {
     pub fn new(n: DirNode) -> Self {
         Self(Arc::new(RwLock::new(n)))
+    }
+
+    pub fn inner(&self) -> &Arc<RwLock<DirNode>> {
+        &self.0
     }
 }
 
@@ -18,14 +21,6 @@ impl Clone for SharedNodeRef {
         Self(self.0.clone())
     }
 }
-
-// impl Deref for SharedNodeRef {
-//     type Target = Rc<RefCell<DirNode>>;
-//
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
 
 impl PartialEq for SharedNodeRef {
     fn eq(&self, other: &Self) -> bool {
@@ -49,7 +44,7 @@ impl Hash for SharedNodeRef {
 }
 
 pub struct DirNode {
-    pub(crate) _parent: Option<SharedNodeRef>,
+    _parent: Option<SharedNodeRef>,
     _path: PathBuf,
     _is_copied: bool,
     _sub_nodes: HashMap<String, SharedNodeRef>,
@@ -65,13 +60,17 @@ impl DirNode {
         }
     }
 
+    pub fn parent(&self) -> &Option<SharedNodeRef> {
+        &self._parent
+    }
+
     pub fn add_sub_nodes(&mut self, node: SharedNodeRef) {
         let key = node.0.read().unwrap().path().to_str().unwrap().to_string();
         self._sub_nodes.insert(key, node);
     }
 
-    pub fn this_node_copied(&mut self) {
-        //if leaf
+    pub fn set_copied(&mut self) {
+        //If leaf, set copied.
         if self._sub_nodes.is_empty() {
             println!(
                 "{:?} has no children, is leaf. Set copied true.",
@@ -80,7 +79,7 @@ impl DirNode {
             self._is_copied = true;
             return;
         }
-        //try delete children
+        //Try delete children when is not leaf.
         println!(
             "{:?} has children, is not leaf, try delete children.",
             self._path
@@ -94,6 +93,8 @@ impl DirNode {
             drop(read);
             r
         });
+
+        //If children is empty then is leaf, set copied.
         self._is_copied = self._sub_nodes.is_empty();
 
         if self._is_copied {
@@ -119,17 +120,6 @@ impl DirNode {
 
     pub fn path(&self) -> &PathBuf {
         &self._path
-    }
-
-    fn check_all_copied(&mut self) -> bool {
-        return self.is_copied();
-    }
-
-    fn lookup(&self) {
-        if let Some(p) = &self._parent {
-            let mut writer = p.0.write().unwrap();
-            writer.this_node_copied();
-        }
     }
 }
 
@@ -190,7 +180,7 @@ mod test {
             let shared_node = r.0.clone();
             handlers.push(thread::spawn(move || {
                 let mut writer = shared_node.write().unwrap();
-                writer.this_node_copied();
+                writer.set_copied();
                 drop(writer);
                 let reader = shared_node.read().unwrap();
                 let lookup_flag = reader.is_copied();
@@ -203,7 +193,7 @@ mod test {
                     drop(reader);
                     if let Some(p) = p {
                         let mut writer = p.0.write().unwrap();
-                        writer.this_node_copied();
+                        writer.set_copied();
                     }
                 }
             }));
@@ -214,7 +204,7 @@ mod test {
                     let shared_node = r.0.clone();
                     handlers.push(thread::spawn(move || {
                         let mut writer = shared_node.write().unwrap();
-                        writer.this_node_copied();
+                        writer.set_copied();
                         drop(writer);
                         let reader = shared_node.read().unwrap();
                         let lookup_flag = reader.is_copied();
@@ -227,16 +217,13 @@ mod test {
                             drop(reader);
                             if let Some(p) = p {
                                 let mut writer = p.0.write().unwrap();
-                                writer.this_node_copied();
+                                writer.set_copied();
                             }
                         }
                     }))
                 }
             }
         }
-
-        // let new_r = new_r.clone();
-        // root.0.write().unwrap().check_all_copied();
 
         println!("Waiting copy stop...");
         loop {
@@ -261,51 +248,6 @@ mod test {
         }
 
         println!("done.");
-    }
-
-    #[test]
-    fn tree_test_multi() {
-        let root = build_tree();
-
-        println!("tree built, start test");
-
-        for (_key, r) in &root.0.read().unwrap()._sub_nodes {
-            let reader = r.0.read().unwrap();
-            println!("sub node {:?}", reader.path());
-            if !reader._sub_nodes.is_empty() {
-                drop(reader);
-
-                let mut writer = r.0.write().unwrap();
-                writer.this_node_copied();
-                drop(writer);
-
-                println!("-------------");
-
-                for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
-                    println!("sub node {:?}", r2.0.read().unwrap().path());
-                    r2.0.write().unwrap().this_node_copied();
-                }
-                println!("-------------");
-            }
-        }
-
-        // let new_r = new_r.clone();
-        root.0.write().unwrap().check_all_copied();
-
-        println!("------change-------");
-
-        for (_key, r) in &root.0.read().unwrap()._sub_nodes {
-            println!("sub node {:?}", r.0.read().unwrap().path());
-            if !r.0.read().unwrap()._sub_nodes.is_empty() {
-                println!("-------------");
-                for (_key2, r2) in &r.0.read().unwrap()._sub_nodes {
-                    println!("sub node {:?}", r2.0.read().unwrap().path());
-                }
-                println!("-------------");
-            }
-        }
-
-        println!("done");
     }
 
     #[test]

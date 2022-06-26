@@ -63,9 +63,7 @@ impl Drop for ThreadPool {
         println!("All threads received terminate message, waiting join");
 
         for j in &mut self.handlers {
-            if let j = j.take().unwrap() {
-                j.join().unwrap();
-            }
+            j.take().unwrap().join().unwrap();
         }
         println!("All threads joined, drop.");
     }
