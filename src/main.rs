@@ -10,7 +10,9 @@ use crate::test_gen::TestDirGenerator;
 use clap::{Parser, Subcommand};
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
-use std::thread;
+use std::{fs, thread};
+use std::error::Error;
+use std::process::exit;
 use std::time::{Duration, Instant};
 
 #[derive(Subcommand, Debug)]
@@ -133,6 +135,52 @@ fn single_thread_copy(from: &str, to: &str) {
     println!("Copy action took {} milliseconds", elapsed_time.as_millis());
 }
 
+fn path_preprocess(from : &str, to: &str) -> Result<(String, String), &'static str> {
+
+    let abs_from = fs::canonicalize(Path::new(from));
+    if abs_from.is_err() {
+        return Err("Preprocess from param failed.")
+    }
+
+    let mut abs_to_pathbuff = PathBuf::from(to);
+    let mut abs_to = fs::canonicalize(Path::new(to));
+
+    if abs_to.is_err() {
+        let mut count = 0;
+        while !abs_to_pathbuff.exists() {
+            let p = abs_to_pathbuff.pop();
+            if !p {
+                return Err("Preprocess to param failed");
+            }
+            count+=1;
+        }
+        let mut abs_to_pathbuff_children = PathBuf::from(to);
+        let mut new_buff = PathBuf::new();
+        for (i, path) in abs_to_pathbuff_children.iter().rev().enumerate() {
+            new_buff.push(path);
+            if i >= count - 1 {
+                break;
+            }
+        }
+
+        let children = new_buff.iter().rev().collect::<PathBuf>();
+        abs_to_pathbuff = fs::canonicalize(abs_to_pathbuff).unwrap();
+        abs_to_pathbuff = abs_to_pathbuff.join(children);
+
+    }
+
+    if create_dir_all(abs_to_pathbuff.clone()).is_err() {
+        return Err("Create to directory failed");
+    }
+
+    println!("{:?}", abs_from);
+    println!("{:?}", abs_to_pathbuff);
+
+    // exit(1);
+
+    return Ok((String::from(abs_from.unwrap().to_str().unwrap()), String::from(abs_to_pathbuff.to_str().unwrap())));
+}
+
 fn run() {
     let args = Args::parse();
     if let Some(subcommand) = &args.test_command {
@@ -144,11 +192,16 @@ fn run() {
         match &args.to {
             Some(to) => {
                 println!("to: {}", to);
+                let (abs_from, abs_to) = path_preprocess(from, to).unwrap();
+
+                println!("{}", abs_from);
+                println!("{}", abs_to);
+
                 if args.single_thread {
-                    single_thread_copy(from, to);
+                    single_thread_copy(&abs_from, &abs_to);
                 } else {
                     let threads_number = args.thread;
-                    multi_threads_copy(from, to, threads_number);
+                    multi_threads_copy(&abs_from, &abs_to, threads_number);
                 }
             }
             None => {
