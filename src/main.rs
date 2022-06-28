@@ -94,23 +94,20 @@ fn main() {
         subcommand.exec();
     }
 
-    if let Some(from) = &args.from {
+    if args.from.is_some() && args.to.is_some() {
+        let from = &args.from.unwrap();
         println!("from: {}", from);
-        match &args.to {
-            Some(to) => {
-                println!("to: {}", to);
-                let mut builder = Copyer::builder().set_from(from).set_to(to);
+        let to = &args.to.unwrap();
+        println!("to: {}", to);
+        let mut builder = Copyer::builder().set_from(from).set_to(to);
 
-                if !args.single_thread {
-                    builder = builder
-                        .set_multi_threads(!args.single_thread)
-                        .set_threads_number(args.thread);
-                }
-                builder.build().unwrap().run();
-            }
-            None => {
-                println!("Not set target");
-            }
+        if !args.single_thread {
+            builder = builder
+                .set_multi_threads(!args.single_thread)
+                .set_threads_number(args.thread);
         }
+        builder.build().unwrap().run();
+    } else if (args.from.is_some() || args.to.is_some()) && !(args.from.is_none() && args.to.is_none()) {
+        println!("Not set target or from path.");
     }
 }
