@@ -11,8 +11,7 @@ use clap::{Parser, Subcommand};
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use std::{fs, thread};
-use std::error::Error;
-use std::process::exit;
+
 use std::time::{Duration, Instant};
 
 #[derive(Subcommand, Debug)]
@@ -135,15 +134,14 @@ fn single_thread_copy(from: &str, to: &str) {
     println!("Copy action took {} milliseconds", elapsed_time.as_millis());
 }
 
-fn path_preprocess(from : &str, to: &str) -> Result<(String, String), &'static str> {
-
+fn path_preprocess(from: &str, to: &str) -> Result<(String, String), &'static str> {
     let abs_from = fs::canonicalize(Path::new(from));
     if abs_from.is_err() {
-        return Err("Preprocess from param failed.")
+        return Err("Preprocess from param failed.");
     }
 
     let mut abs_to_pathbuff = PathBuf::from(to);
-    let mut abs_to = fs::canonicalize(Path::new(to));
+    let abs_to = fs::canonicalize(Path::new(to));
 
     if abs_to.is_err() {
         let mut count = 0;
@@ -152,9 +150,9 @@ fn path_preprocess(from : &str, to: &str) -> Result<(String, String), &'static s
             if !p {
                 return Err("Preprocess to param failed");
             }
-            count+=1;
+            count += 1;
         }
-        let mut abs_to_pathbuff_children = PathBuf::from(to);
+        let abs_to_pathbuff_children = PathBuf::from(to);
         let mut new_buff = PathBuf::new();
         for (i, path) in abs_to_pathbuff_children.iter().rev().enumerate() {
             new_buff.push(path);
@@ -166,7 +164,6 @@ fn path_preprocess(from : &str, to: &str) -> Result<(String, String), &'static s
         let children = new_buff.iter().rev().collect::<PathBuf>();
         abs_to_pathbuff = fs::canonicalize(abs_to_pathbuff).unwrap();
         abs_to_pathbuff = abs_to_pathbuff.join(children);
-
     }
 
     if create_dir_all(abs_to_pathbuff.clone()).is_err() {
@@ -178,7 +175,10 @@ fn path_preprocess(from : &str, to: &str) -> Result<(String, String), &'static s
 
     // exit(1);
 
-    return Ok((String::from(abs_from.unwrap().to_str().unwrap()), String::from(abs_to_pathbuff.to_str().unwrap())));
+    return Ok((
+        String::from(abs_from.unwrap().to_str().unwrap()),
+        String::from(abs_to_pathbuff.to_str().unwrap()),
+    ));
 }
 
 fn run() {
