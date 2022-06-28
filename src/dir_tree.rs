@@ -121,6 +121,33 @@ impl DirNode {
     pub fn path(&self) -> &PathBuf {
         &self._path
     }
+
+    // If current node is copied and has parent, set current node to parent and repeat.
+    pub fn try_lookup_continuously(start_node: SharedNodeRef) {
+        let reader = start_node.inner().read().unwrap();
+        let mut lookup_flag = reader.is_copied();
+
+        let mut may_parent = None;
+
+        if let Some(p) = &reader.parent() {
+            may_parent = Some(p.clone());
+        }
+        drop(reader);
+
+        while lookup_flag && may_parent.is_some() {
+            let parent = may_parent.take().unwrap();
+            let mut writer = parent.inner().write().unwrap();
+            writer.set_copied();
+            drop(writer);
+
+            let reader = parent.inner().read().unwrap();
+            lookup_flag = reader.is_copied();
+
+            if let Some(p) = &reader.parent() {
+                may_parent = Some(p.clone());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
