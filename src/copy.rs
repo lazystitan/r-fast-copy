@@ -8,6 +8,7 @@ use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 use std::{fs, io, thread};
 
+#[derive(Clone)]
 pub struct CopyBuilder {
     verbose: bool,
     multi_threads: bool,
@@ -19,16 +20,12 @@ pub struct CopyBuilder {
 impl CopyBuilder {
     pub fn set_threads_number(mut self, num: usize) -> Self {
         self.threads_number = num;
+        self.multi_threads = true;
         self
     }
 
     pub fn set_verbose(mut self, verbose: bool) -> Self {
         self.verbose = verbose;
-        self
-    }
-
-    pub fn set_multi_threads(mut self, is_use: bool) -> Self {
-        self.multi_threads = is_use;
         self
     }
 
