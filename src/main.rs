@@ -82,12 +82,11 @@ struct Args {
     // name: String,
     #[clap(subcommand)]
     test_command: Option<TestCommand>,
+
+    #[clap(short, long, value_parser, default_value_t = false)]
+    verbose: bool,
 }
 
-//threas    first time  second time average boost
-//16	    14879       15123       15001 	51%
-// 4	    16620       18419       17519.5	29%
-// s	    21401       23953       22677	0%
 fn main() {
     let args = Args::parse();
     if let Some(subcommand) = &args.test_command {
@@ -99,7 +98,7 @@ fn main() {
         println!("from: {}", from);
         let to = &args.to.unwrap();
         println!("to: {}", to);
-        let mut builder = Copyer::builder().set_from(from).set_to(to);
+        let mut builder = Copyer::builder().set_from(from).set_to(to).set_verbose(args.verbose);
 
         if !args.single_thread {
             builder = builder

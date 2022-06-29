@@ -27,7 +27,6 @@ impl ThreadPool {
                 let task = lock.lock().unwrap().recv().unwrap();
                 match task {
                     Message::NewTask(task) => {
-                        println!("Threads {} received new task.", id);
                         task();
                     }
                     Message::Terminate => {
@@ -60,12 +59,9 @@ impl Drop for ThreadPool {
             self.sender.send(Message::Terminate).unwrap();
         }
 
-        println!("All threads received terminate message, waiting join");
-
         for j in &mut self.handlers {
             j.take().unwrap().join().unwrap();
         }
-        println!("All threads joined, drop.");
     }
 }
 

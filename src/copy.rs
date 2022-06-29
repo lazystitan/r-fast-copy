@@ -22,8 +22,8 @@ impl CopyBuilder {
         self
     }
 
-    pub fn set_verbose(mut self) -> Self {
-        self.verbose = true;
+    pub fn set_verbose(mut self, verbose: bool) -> Self {
+        self.verbose = verbose;
         self
     }
 
@@ -105,8 +105,10 @@ impl CopyBuilder {
 
         let (abs_from, abs_to) = r.unwrap();
         let mut pool = None;
+        let mut root = None;
         if self.threads_number > 0 {
             pool = Some(ThreadPool::new(self.threads_number));
+            root = Some(SharedNodeRef::new(DirNode::new(PathBuf::from(abs_to.clone()), self.verbose)));
         }
 
         Ok(Copyer {
@@ -115,7 +117,7 @@ impl CopyBuilder {
             pool,
             from: PathBuf::from(abs_from),
             to: PathBuf::from(abs_to),
-            _root: None,
+            _root: root,
         })
     }
 }
@@ -141,12 +143,14 @@ impl Copyer {
     }
 
     pub fn run_multi_threads(self) {
+        let pool_ref = self.pool.as_ref().unwrap();
         Self::copy_dir_recursive(
             PathBuf::from(self.from),
             PathBuf::from(self.to),
             PathBuf::new(),
-            self.pool.unwrap().sender.clone(),
+            pool_ref.sender.clone(),
             self._root.as_ref().unwrap().clone(),
+            self.verbose
         )
         .expect("Copy failed");
 
@@ -177,7 +181,7 @@ impl Copyer {
 
     pub fn run_single_threads(self) {
         let now = Instant::now();
-        Self::copy_dir_recursive_single_thread(&self.from, &self.to, &PathBuf::new())
+        Self::copy_dir_recursive_single_thread(&self.from, &self.to, &PathBuf::new(), self.verbose)
             .expect("Copy failed");
         let elapsed_time = now.elapsed();
         println!("Copy action took {} milliseconds", elapsed_time.as_millis());
@@ -203,26 +207,33 @@ impl Copyer {
         from: &Path,
         dest: &Path,
         depth_path: &PathBuf,
+        verbose: bool
     ) -> Result<(), io::Error> {
-        println!("-----------");
-        println!("from : {:?}", from);
-        println!("dest : {:?}", dest);
-        println!("depth_path : {:?}", depth_path);
         let read_dir = from.clone().to_path_buf().join(depth_path);
-        println!("read_dir : {:?}", read_dir);
+        if verbose {
+            println!("-----------");
+            println!("from : {:?}", from);
+            println!("dest : {:?}", dest);
+            println!("depth_path : {:?}", depth_path);
+            println!("read_dir : {:?}", read_dir);
+        }
         for entry in fs::read_dir(read_dir)? {
             let entry = entry?;
             let path = entry.path();
             let new_depth_path = depth_path.clone().join(Path::new(&entry.file_name()));
             let creating_path = dest.clone().to_path_buf().join(new_depth_path.clone());
             if path.is_dir() && !path.is_symlink() {
-                println!("next depth's path: {:?}", new_depth_path);
-                println!("creating path: {:?}", new_depth_path);
+                if verbose {
+                    println!("next depth's path: {:?}", new_depth_path);
+                    println!("creating path: {:?}", new_depth_path);
+                }
                 create_dir_all(&creating_path)?;
-                Self::copy_dir_recursive_single_thread(from, dest, &new_depth_path)?;
+                Self::copy_dir_recursive_single_thread(from, dest, &new_depth_path,verbose)?;
             } else if path.is_file() || path.is_symlink() {
                 let read_file = from.clone().to_path_buf().join(new_depth_path.clone());
-                println!("creating file : {:?}", creating_path);
+                if verbose {
+                    println!("creating file : {:?}", creating_path);
+                }
                 Self::copy_file(read_file.as_path(), creating_path.as_path())?;
             }
         }
@@ -236,35 +247,47 @@ impl Copyer {
         depth_path: PathBuf,
         sender: Sender<Message>,
         parent_node: SharedNodeRef,
+        verbose: bool
     ) -> Result<(), io::Error> {
-        println!("-----------");
-        println!("from : {:?}", from);
-        println!("dest : {:?}", dest);
-        println!("depth_path : {:?}", depth_path);
         let read_dir = from.clone().to_path_buf().join(depth_path.clone());
-        println!("read_dir : {:?}", read_dir);
+        if verbose {
+            println!("-----------");
+            println!("from : {:?}", from);
+            println!("dest : {:?}", dest);
+            println!("depth_path : {:?}", depth_path);
+            println!("read_dir : {:?}", read_dir);
+        }
         for entry in fs::read_dir(read_dir)? {
             let entry = entry?;
             let path = entry.path();
             let new_depth_path = depth_path.clone().join(Path::new(&entry.file_name()));
             let creating_path = dest.clone().to_path_buf().join(new_depth_path.clone());
             if path.is_dir() && !path.is_symlink() {
-                println!("next depth's path: {:?}", new_depth_path);
-                println!("creating path: {:?}", new_depth_path);
+                if verbose {
+                    println!("next depth's path: {:?}", new_depth_path);
+                    println!("creating path: {:?}", new_depth_path);
+                }
                 create_dir_all(&creating_path)?;
 
                 // Create new node for directory in this loop, and then attach it to directory tree and
                 // set parent for it.
-                println!("creating new node for path {:?}", creating_path);
-                let mut node = DirNode::new(creating_path);
+                if verbose {
+                    println!("creating new node for path {:?}", creating_path);
+                }
+                let mut node = DirNode::new(creating_path, verbose);
                 node.set_parent(parent_node.clone());
                 let node_r = SharedNodeRef::new(node);
 
-                println!("add new node to parent");
+                if verbose {
+                    println!("add new node to parent");
+                }
                 let mut writer = parent_node.inner().write().unwrap();
                 writer.add_sub_nodes(node_r.clone());
                 drop(writer);
-                println!("attach node to tree done");
+
+                if verbose {
+                    println!("attach node to tree done");
+                }
 
                 let new_from = from.clone();
                 let new_dest = dest.clone();
@@ -280,19 +303,24 @@ impl Copyer {
                             new_new_depth_path,
                             new_sender,
                             node_r,
+                            verbose
                         )
                         .unwrap();
                     })))
                     .unwrap();
             } else if path.is_file() || path.is_symlink() {
                 let read_file = from.clone().to_path_buf().join(new_depth_path.clone());
-                println!("creating file : {:?}", creating_path);
+                if verbose {
+                    println!("creating file : {:?}", creating_path);
+                }
                 Self::copy_file(read_file.as_path(), creating_path.as_path())?;
             }
         }
 
         let mut writer = parent_node.inner().write().unwrap();
-        println!("start lookup {:?}", writer.path());
+        if verbose {
+            println!("start lookup {:?}", writer.path());
+        }
         writer.set_copied(); //当前node的父node检查
         drop(writer);
 

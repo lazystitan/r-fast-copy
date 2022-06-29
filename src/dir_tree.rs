@@ -48,15 +48,17 @@ pub struct DirNode {
     _path: PathBuf,
     _is_copied: bool,
     _sub_nodes: HashMap<String, SharedNodeRef>,
+    verbose: bool
 }
 
 impl DirNode {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf, verbose: bool) -> Self {
         Self {
             _parent: None,
             _path: path,
             _is_copied: false,
             _sub_nodes: HashMap::new(),
+            verbose,
         }
     }
 
@@ -72,24 +74,32 @@ impl DirNode {
     pub fn set_copied(&mut self) {
         //If leaf, set copied.
         if self._sub_nodes.is_empty() {
-            println!(
-                "{:?} has no children, is leaf. Set copied true.",
-                self._path
-            );
+            if self.verbose {
+                println!(
+                    "{:?} has no children, is leaf. Set copied true.",
+                    self._path
+                );
+            }
             self._is_copied = true;
             return;
         }
         //Try delete children when is not leaf.
-        println!(
-            "{:?} has children, is not leaf, try delete children.",
-            self._path
-        );
+        if self.verbose {
+            println!(
+                "{:?} has children, is not leaf, try delete children.",
+                self._path
+            );
+        }
         self._sub_nodes.retain(|_k, r| {
             //delete those nodes that had been copied
             let read = r.0.read().unwrap();
-            println!("{:?} has read lock when judge if to delete", read._path);
+            if self.verbose {
+                println!("{:?} has read lock when judge if to delete", read._path);
+            }
             let r = !read.is_copied();
-            println!("{:?}'s read lock drop when judge if to delete", read._path);
+            if self.verbose {
+                println!("{:?}'s read lock drop when judge if to delete", read._path);
+            }
             drop(read);
             r
         });
@@ -97,12 +107,12 @@ impl DirNode {
         //If children is empty then is leaf, set copied.
         self._is_copied = self._sub_nodes.is_empty();
 
-        if self._is_copied {
+        if self._is_copied && self.verbose {
             println!(
                 "{:?} has no children after delete, is leaf. return.",
                 self._path
             );
-        } else {
+        } else if self.verbose {
             println!(
                 "{:?} has children after delete, is not leaf. return.",
                 self._path
@@ -167,12 +177,12 @@ mod test {
     //                   |          |         |         |           |
     //                  <B1>      <B2>      <B3>       <B4>        <B5>
     fn build_tree() -> SharedNodeRef {
-        let r = DirNode::new(PathBuf::from(String::from("./test_dir/tree")));
+        let r = DirNode::new(PathBuf::from(String::from("./test_dir/tree")), true);
         let root_rc = SharedNodeRef::new(r);
 
         for i in 0..5 {
             let p = PathBuf::from("./test_dir/tree/A".to_string() + &(i + 1).to_string());
-            let mut tn = DirNode::new(p);
+            let mut tn = DirNode::new(p, true);
             tn.set_parent(root_rc.clone());
             root_rc
                 .0
@@ -187,7 +197,7 @@ mod test {
 
         for i in 0..5 {
             let p = PathBuf::from("./test_dir/tree/A3/B".to_string() + &(i + 1).to_string());
-            let mut tn = DirNode::new(p);
+            let mut tn = DirNode::new(p, true);
             tn.set_parent(r2.clone());
             r2.0.write().unwrap().add_sub_nodes(SharedNodeRef::new(tn));
         }
