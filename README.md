@@ -25,4 +25,4 @@ Run `cargo run -- gen-test-folder -h` or `r-fast-copy gen-test-foler -h` to get 
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE.md)
