@@ -23,5 +23,6 @@ r-fast-Copy also supply a subcommand for generate test folder at gaven position.
 
 Run `cargo run -- gen-test-folder -h` or `r-fast-copy gen-test-foler -h` to get usage.
 
-[//]: # (## License)
+## License
 
+[MIT](LICENSE)
