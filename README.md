@@ -11,6 +11,8 @@ Multithreaded copy tool implement by rust. Focus primarily on a large number of 
 
 ## Install
 
+You need to install the rust compiler toolchain first.
+
 Run `cargo build --release` to compile.
 Then you can add `target\release\r-fast-copy[.exe]` to your path.
 
